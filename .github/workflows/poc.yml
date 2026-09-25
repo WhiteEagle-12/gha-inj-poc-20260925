@@ -1,5 +1,7 @@
 name: PoC pypi-publish injection replica (full chain)
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
