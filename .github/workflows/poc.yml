@@ -1,9 +1,9 @@
-name: PoC pypi-publish injection replica
+name: PoC pypi-publish injection replica (full chain)
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Existing release tag to publish (e.g. 9.5.1 or v9.5.1). The tag must already exist."
+        description: "Existing release tag to publish (e.g. 9.5.1). The tag must already exist."
         required: true
         type: string
 
@@ -25,4 +25,56 @@ jobs:
           version="${version#v}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "name=v$version" >> "$GITHUB_OUTPUT"
-          echo "Derived version=$version"
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.tag.outputs.name }}
+
+      - name: Verify package version matches tag
+        run: |
+          actual=$(sed -n 's/^__versionstr__ = "\(.*\)"/\1/p' elasticsearch/_version.py)
+          expected="${{ steps.tag.outputs.version }}"
+          if [ "$actual" != "$expected" ]; then
+            echo "elasticsearch/_version.py is $actual, tag is $expected"
+            exit 1
+          fi
+          echo "VERSION_CHECK_PASSED actual=$actual expected=$expected"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install build dependencies
+        run: python -m pip install build
+
+      - name: Build dists
+        run: python utils/build-dists.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dists
+          path: dist/
+
+  publish:
+    name: "Publish (inspection only)"
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dists
+          path: dist/
+      - name: Inspect artifact (stands in for pypa/gh-action-pypi-publish)
+        run: |
+          echo "## Artifact contents delivered to the publish job" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          find dist -type f | sort >> "$GITHUB_STEP_SUMMARY"
+          for f in dist/*; do echo "--- $f ---"; head -5 "$f" 2>/dev/null; done >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo
+          echo "== live listing =="
+          find dist -type f | sort
+          if [ -f dist/POISONED_ARTIFACT.txt ]; then
+            echo "POISON_CONFIRMED_IN_PUBLISH_JOB"
+            echo "POISON_CONFIRMED_IN_PUBLISH_JOB" >> "$GITHUB_STEP_SUMMARY"
+          fi
