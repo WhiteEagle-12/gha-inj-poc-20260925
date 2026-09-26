@@ -1,0 +1,19 @@
+name: C2 replica
+on:
+  workflow_dispatch:
+    inputs:
+      ecsRef:
+        description: ECS ref
+        required: true
+        type: string
+jobs:
+  gen:
+    runs-on: ubuntu-latest
+    steps:
+      - id: ecs_version
+        run: |
+          ECS_REF="${{ inputs.ecsRef }}"
+          echo "ecs_ref=${ECS_REF}" >> "$GITHUB_OUTPUT"
+          echo "C2 step finished" >> "$GITHUB_STEP_SUMMARY"
+      - run: |
+          echo "would run: yarn generate-ecs-types -r ${{ steps.ecs_version.outputs.ecs_ref }}"
