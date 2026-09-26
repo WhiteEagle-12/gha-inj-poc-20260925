@@ -1,0 +1,27 @@
+name: A1 replica
+on: pull_request
+jobs:
+  analyze:
+    if: startsWith(github.head_ref, 'docs-bugfix/') || startsWith(github.head_ref, 'docs-enhancement/')
+    runs-on: ubuntu-latest
+    steps:
+      - id: analyze
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [[ "${{ github.head_ref }}" =~ ^docs-bugfix/ ]]; then
+            echo "A1 first-order sink reached" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          PR_BODY=$(gh pr view ${{ github.event.pull_request.number }} --json body -q '.body // ""' || true)
+          CHANGELOG_DESC="Improve documentation"
+          if echo "$PR_BODY" | grep -qi "^changelog:"; then
+            CUSTOM_DESC=$(echo "$PR_BODY" | grep -i "^changelog:" | sed 's/^changelog://i' | xargs)
+            if [ -n "$CUSTOM_DESC" ]; then
+              CHANGELOG_DESC=$(echo "$CUSTOM_DESC" | sed 's/"/\\"/g' | sed "s/'/\\'/g")
+            fi
+          fi
+          echo "changelog_desc=$CHANGELOG_DESC" >> "$GITHUB_OUTPUT"
+      - run: |
+          CHANGELOG_DESC="${{ steps.analyze.outputs.changelog_desc }}"
+          echo "A1 second-order sink reached" >> "$GITHUB_STEP_SUMMARY"
